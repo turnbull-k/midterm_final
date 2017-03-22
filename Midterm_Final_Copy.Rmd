@@ -1,0 +1,902 @@
+---
+title: "Midterm_Final_Copy"
+author: "Kirstie Turnbull"
+date: "March 21, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The following data have been cleaned in preparation for a statistician to investigate and analyze the safety of workplaces in the state of Massachusetts. These data were retrieved from the Occupational Safety and Health Administration (OSHA) and are from April, 2005. The original set of data included information regarding both safety records and debt/payment records. Due to the fact that debt history data are not relavent to workplace safety, that data have been removed from the cleaned data represented in this document.
+
+
+The first data set, CleanAccid, includes data about workplace accidents in the state of Massachusetts. The data were originally in code and the column titles were unclear, so in the cleaning process the coded data were replaced with English words and the column titles were clarified. The SITESTATE column was also removed, as all of the data relavent to the workplace safety question of interest are from Massachusetts. For commented code, see CleanAccid.R in the MA415MidtermFolder.
+
+```{r CleanAccid, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(plyr)
+
+# reading in accid.dbf and the accid lookups file
+a <- read.dbf("accid.dbf")
+b <- read.dbf("lookups/acc.dbf")
+
+# if every entry in the site state column is MA, we can remove that column
+if(sum(a$SITESTATE=="MA")==dim(a)[1]){
+  a %<>% select(-SITESTATE)
+}
+
+# i just want to look at what number is assigned to what body part
+bodypartstable <- b[(b$CATEGORY=="PART-BODY"),]
+bodypartstable <- select(bodypartstable, CODE, VALUE)
+colnames(bodypartstable) <- c("BODYPART", "VALUE")
+# adding column to a that has actual bodypart in words instead of number
+c <- left_join(a, bodypartstable, by="BODYPART")
+# removing column that is just coded numbers and renaming worded part bodypart
+c %<>% select(-BODYPART)
+colnames(c)[15]="BODYPART"
+
+# reading in next lookup for occupations codes
+d <- read.dbf("lookups/occ.DBF")
+# changing OCC_CODE column to one with words
+colnames(d) <- c("OCC_CODE", "VALUE")
+e <- left_join(c, d, by="OCC_CODE")
+e %<>% select(-OCC_CODE)
+colnames(e)[15]="OCCUPATION"
+
+# changing ENVIRON column to one with words
+eftable <- b[(b$CATEGORY=="ENVIR-FAC"),]
+eftable <- select(eftable, CODE, VALUE)
+colnames(eftable) <- c("ENVIRON", "VALUE")
+f <- left_join(e, eftable, by="ENVIRON")
+f %<>% select(-ENVIRON)
+colnames(f)[15]="ENVIR-FAC"
+
+# changing event column from code to words
+ettable <- b[(b$CATEGORY=="EVENT-TYP"),]
+ettable <- select(ettable, CODE, VALUE)
+colnames(ettable) <- c("EVENT", "VALUE")
+g <- left_join(f, ettable, by="EVENT")
+g %<>% select(-EVENT)
+colnames(g)[15]="EVENT"
+
+# changing human column from code to words
+hftable <- b[(b$CATEGORY=="HUMAN-FAC"),]
+hftable <- select(hftable, CODE, VALUE)
+colnames(hftable) <- c("HUMAN", "VALUE")
+h <- left_join(g, hftable, by="HUMAN")
+h %<>% select(-HUMAN)
+colnames(h)[15]="HUMAN-FAC"
+
+# changing nature column from code to words
+nitable <- b[(b$CATEGORY=="NATUR-INJ"),]
+nitable <- select(nitable, CODE, VALUE)
+colnames(nitable) <- c("NATURE", "VALUE")
+i <- left_join(h, nitable, by="NATURE")
+i %<>% select(-NATURE)
+colnames(i)[15]="NATURE-INJ"
+
+# changing source column from code to words
+sitable <- b[(b$CATEGORY=="SOURC-INJ"),]
+sitable <- select(sitable, CODE, VALUE)
+colnames(sitable) <- c("SOURCE", "VALUE")
+j <- left_join(i, sitable, by="SOURCE")
+j %<>% select(-SOURCE)
+colnames(j)[15]="SOURCE-INJ"
+
+# clarifying some column titles
+colnames(j)[2]="NAME_OF_VICTIM"
+colnames(j)[3]="INSPECTION_ACTIVITY_NO"
+
+# changing degree and task from number to word
+j$DEGREE <- revalue(j$DEGREE, c("0" = "None", "1"="fatality", "2"="hospitalized injury", "3"="non-hospitalized injury"))
+j$TASK <- revalue(j$TASK, c("1"="regular task", "2"="non-regular task"))
+
+# Creating a table about the degrees of violations because this is one example of interesting data that is relavent to the workplace safety question in the CleanAccid dataframe
+table(j$DEGREE)
+```
+
+
+
+```{r CleanAccid plot, echo=FALSE}
+library(ggplot2)
+# plotting the degrees of violations because this is interesting data that is relavent to the workplace safety question
+ggplot(j, aes(x=DEGREE, fill=DEGREE)) + geom_bar() + ggtitle( "Degree of Violation")
+
+```
+Degree of violation, as seen above in both table and plot format, is one example of interesting data from the CleanAccid dataframe that is relavent to the workplace safety question that is being investigated by statisticians.
+
+The next data set, CleanHazsub, contains information regarding hazardous substances that employees have been to exposed to at different workplaces in Massachusetts. Again, because all of the data are from Massachusetts, the SITESTATE column was removed during cleaning. Additionally, the data were altered from code to the names of each substance. For commented code, see CleanHazsub.R in the MA415MidtermFolder.
+
+```{r CleanHazsub, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(plyr)
+
+# reading in hazsub file
+k <- read.dbf("hazsub.DBF")
+#reading in hazsub lookup
+l <- read.dbf("lookups/hzs.dbf")
+
+# checking to make sure only data from MA is in this file and then removing that column
+if(sum(k$SITESTATE=="MA")==dim(k)[1]){
+  k %<>% select(-SITESTATE)
+}
+
+# changing HazSub1-5 columns from code to words
+colnames(l) <- c("HAZSUB1", "VALUE")
+new_k <- left_join(k, l, by="HAZSUB1")
+new_k %<>% select(-HAZSUB1)
+colnames(new_k)[9]="HAZSUB1"
+
+colnames(l) <- c("HAZSUB2", "VALUE")
+new_k <- left_join(new_k, l, by="HAZSUB2")
+new_k %<>% select(-HAZSUB2)
+colnames(new_k)[9]="HAZSUB2"
+
+colnames(l) <- c("HAZSUB3", "VALUE")
+new_k <- left_join(new_k, l, by="HAZSUB3")
+new_k %<>% select(-HAZSUB3)
+colnames(new_k)[9]="HAZSUB3"
+
+# checking whether or not HAZSUB4 is empty
+sum(is.na(new_k$HAZSUB4)==FALSE)
+# not empty! change from code to words
+colnames(l) <- c("HAZSUB4", "VALUE")
+new_k <- left_join(new_k, l, by="HAZSUB4")
+new_k %<>% select(-HAZSUB4)
+colnames(new_k)[9]="HAZSUB4"
+
+# check is HAZSUB5 is empty
+sum(is.na(new_k$HAZSUB5)==FALSE)
+# not empty! change from code to words
+colnames(l) <- c("HAZSUB5", "VALUE")
+new_k <- left_join(new_k, l, by="HAZSUB5")
+new_k %<>% select(-HAZSUB5)
+colnames(new_k)[9]="HAZSUB5"
+
+# table of most frequently exposed hazardous substances
+tab <- table(new_k$HAZSUB1)
+hazsubs <- data.frame(tab)
+hazsubs <- hazsubs[hazsubs$Freq>80,]
+colnames(hazsubs) <- c("SUBSTANCE", "FREQUENCY")
+hazsubs
+
+```
+
+```{r CleanHazsub plots, echo=FALSE}
+library(ggplot2)
+# plot of most frequently exposed hazardous substances
+ggplot(hazsubs, aes(x=SUBSTANCE, y=FREQUENCY)) + geom_point() + ggtitle("Most Frequently Exposed Hazardous Substances")
+
+```
+The most frequently exposed hazardous substances, such as lead and dangerous noise, are also relavent to workplace safety. These data are included in the final cleaned CleanHazsub dataframe.
+
+The data in the CleanHistory data set describes information about past penalties or failures-to-abate that workplaces in Massachusetts faced because of safety violations. During the cleaning process, column titles were clarified and any empty columns and the SITESTATE column were removed. This leaves data regarding events, penalties, and the severity of the violation. These data were also originally encoded and when the data were cleaned, the code was changed into English words. For commented code, please see CleanHistory.R in the MA415MidtermFolder.
+
+```{r CleanHistory, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(plyr)
+
+# loading HISTORY data now
+history <- read.dbf("history.dbf")
+
+# checking to make sure only data from MA is in this file and then removing the column
+if(sum(history$SITESTATE=="MA")==dim(history)[1]){
+  history %<>% select(-SITESTATE)
+}
+
+# making some column titles more readable
+colnames(history)[2] <- "FAIL_INSPEC_ACTIVITY_NO"
+colnames(history)[3] <- "FTA_PENALTY"
+colnames(history)[4] <- "TYPE"
+colnames(history)[5] <- "CITATION_ID"
+colnames(history)[6] <- "DATE"
+colnames(history)[7] <- "HIST_EVENT"
+colnames(history)[8] <- "PENALTY"
+colnames(history)[9] <- "ABADEMENT_DATE"
+colnames(history)[10] <- "VIOLATION"
+colnames(history)[11] <- "ACT_AGAINST_RECORD"
+colnames(history)[15] <- "EVENT_ON_FTA_RECORD"
+
+# changing TYPE column from code to words
+history$TYPE <- revalue(history$TYPE, c("P"="penalty", "F"="failure-to-abate"))
+
+# making the dates easier to read
+library(lubridate)
+history$DATE <- ymd(history$DATE)
+history$ABADEMENT_DATE <- ymd(history$ABADEMENT_DATE)
+
+# changing HIST_EVENT from code to words
+hist_event_decoded <- c("Z" ="Issued",  	
+                        "Y" ="State Decision",	
+                        "W"="Employer Withdrew",	
+                        "S"="Unknown",	
+                        "R"="Review Commission",
+                        "P"="Petition to modify abatement",
+                        "O"="Unknown",
+                        "N"="Unknown",
+                        "L"="State Settlement",
+                        "J"="ALJ Decision",
+                        "I"="Informal Settlement",
+                        "F"="Formal Settlement",
+                        "D"="Govt Dismissed (withdrew citation)",
+                        "A"="Amendment",
+                        "3"="Supreme Court",
+                        "2"="Appeals Court",
+                        "1"="State Lower Court",
+                        "0"="Unknown")
+
+history$HIST_EVENT <- revalue(history$HIST_EVENT, hist_event_decoded)
+
+# changing VIOLATION from code to words
+violation_decoded <- c("S" = "Serious",
+                       "R" = "Repeat",
+                       "W" = "Willful",
+                       "O" = "Other",
+                       "U" = "Unclassified")
+history$VIOLATION <- revalue(history$VIOLATION, violation_decoded)
+
+# changing ACT_AGAINST_RECORD from code to words
+act_against_record_decoded <- c("A"="Add",
+                                "D"="Delete",
+                                "M"="Modify",
+                                "N"="No change")
+history$ACT_AGAINST_RECORD <- revalue(history$ACT_AGAINST_RECORD, act_against_record_decoded)
+
+# getting rid of DATEHIST and DTHISTAB because they repeat the dates in DATE and ABADEMENT_DATE
+history %<>% select(-DATEHIST)
+history %<>% select(-DTHISTAB)
+
+# checking to see if FTADATE, FAIL_INSPEC_ACTIVITY_NO, andFTA_PENALTY are only 0's and removing them if true
+if(is.na(dim(history)[12])){
+  history %<>% select(-FTADATE)
+}
+if(is.na(dim(history)[2])){
+  history %<>% select(-FAIL_INSPEC_ACTIVITY_NO)
+}
+if(is.na(dim(history)[3])){
+  history %<>% select(-FTA_PENALTY)
+}
+
+# checking to see if ACT_AGAINST_RECORD, EVENT_ON_FTA_RECORD, FTAACT, FILLER, and DATEFTA are only NA's and removing them if true
+if(is.na(dim(history)[10])){
+  history %<>% select(-ACT_AGAINST_RECORD)
+}
+if(is.na(dim(history)[11])){
+  history %<>% select(-EVENT_ON_FTA_RECORD)
+}
+if(is.na(dim(history)[12])){
+  history %<>% select(-FTAACT)
+}
+if(is.na(dim(history)[13])){
+  history %<>% select(-FILLER)
+}
+if(is.na(dim(history)[14])){
+  history %<>% select(-DATEFTA)
+}
+
+# table about level of violation, an interesting spread of data that is relavent to the workplace safety question
+table(history$VIOLATION)
+```
+
+```{r CleanHistory plots, echo=FALSE}
+library(ggplot2)
+# plot of Level of Violation
+ggplot(history, aes(VIOLATION)) + geom_histogram(stat="count") + ggtitle("Level of Violation")
+
+
+```
+Level of Violation, as seen in the table and plot above, is another example from the cleaned history data that is relavent to the workplace safety question.
+
+The OSHA data set contains data regarding workplace inspections,  denial of entry when workplaces were meant to be inspected, and the specifics of how employees are involved in inspections and litigation. The original set also contained debt collection information, but that was removed because it was not relavent to the question of interest. Column titles were also clarified and encoded data was changed to English words or more obvious abbreviations (such as Y for Yes). Specific locations and names of workplaces are also included in this data set, as well as the number of records that are included in other data sets. For commented code, please see CleanOsha.R in the MA415MidtermFolder.
+
+```{r CleanOsha, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+
+# reading in osha file and making dates more readable
+library(lubridate)
+osha <- read.dbf("osha.dbf")
+
+# renaming columns
+colnames(osha)[1] <- "CONTINUATION_OR_NOT"
+colnames(osha)[2] <- "RECORD_ERA"
+colnames(osha)[3] <- "LATEST_ACT_DATE"
+colnames(osha)[4] <- "ST_OR_FED_INSPECT"
+colnames(osha)[5] <- "MOST_RECENT_ACT"
+colnames(osha)[6] <- "OSHA_INSPECT_NO"
+colnames(osha)[11] <- "OLD_REPORT_NO"
+colnames(osha)[13] <- "STRT_ADDRESS"
+colnames(osha)[15] <- "OFFICE_IDENTIFIER"
+colnames(osha)[21] <- "CODES"
+colnames(osha)[27] <- "EMPLOYEE_COUNT"
+colnames(osha)[28] <- "EMPLOYEES_INSPECTED"
+colnames(osha)[29] <- "NATNL_EMPLOYEE_COUNT"
+colnames(osha)[30] <- "EMPL_PRESENT_DUR_INSPECT"
+colnames(osha)[31] <- "EMPLS_INTVIEWD_DUR_INSPECT"
+colnames(osha)[32] <- "EMPLS_REPD_BY_UNIONS"
+colnames(osha)[43] <- "SUBPOENA_SERVED"
+colnames(osha)[45] <- "RE-ENTRY_DATE"
+colnames(osha)[46] <- "LOST_WORKDAY_INJURY_RATE"
+colnames(osha)[47] <- "S/H_PROGRAM_INITIATED"
+colnames(osha)[49] <- "PENALTY_DUE_DATE"
+colnames(osha)[50] <- "FTA_PENALTY_DUE_DATES"
+colnames(osha)[51] <- "SOURCE_OF_DUE_DATE"
+colnames(osha)[52] <- "TIME_PREPPED_FOR_INSPECT"
+colnames(osha)[53] <- "TIME_TRAVELLING_FOR_INSPECT"
+colnames(osha)[54] <- "TIME_ON_SITE"
+colnames(osha)[55] <- "TIME_PROVIDING ASSISTANCE"
+colnames(osha)[56] <- "TIME_RESEARCHING"
+colnames(osha)[57] <- "TIME_OFF_SITE"
+colnames(osha)[58] <- "TIME_LITIGATING"
+colnames(osha)[59] <- "TIME_ON_DENIAL_ACTIVITY"
+colnames(osha)[60] <- "ALL_INSPECT_HOURS"
+colnames(osha)[62] <- "REMITTED_PENALTY_DOLLARS"
+colnames(osha)[63] <- "REMITTED_FTA_DOLLARS"
+
+# checking to see if CONTINUATION_OR_NOT is empty and removing it if it is
+if(is.na(dim(osha)[1])){
+  osha %<>% select(-CONTINUATION_OR_NOT)
+}
+
+# changing RECORD_ERA from code to words
+record_era_decoded <- c("H" = "historical (7/72-3/84)",
+                        "B" = "IMIS (after 3/84)",
+                        "P" = "entered on IV-Phase",
+                        "X/T" = "entered on-line",
+                        "M" = "entered on micro")
+osha$RECORD_ERA <- revalue(osha$RECORD_ERA, record_era_decoded)
+
+# making dates easier to read
+osha$LATEST_ACT_DATE <- ymd(osha$LATEST_ACT_DATE)
+osha$OPENDATE <- ymd(osha$OPENDATE)
+osha$CLOSEDATE <- ymd(osha$CLOSEDATE)
+osha$CLOSEDATE2 <- ymd(osha$CLOSEDATE2)
+
+# getting ride of columns if they are empty
+if(sum(is.na(osha$ST_OR_FED_INSPECT)==TRUE) == dim(osha)[1]){
+  osha %<>% select(-ST_OR_FED_INSPECT)
+}
+if(sum(is.na(osha$MOST_RECENT_ACT)==TRUE) == dim(osha)[1]){
+  osha %<>% select(-MOST_RECENT_ACT)
+}
+if(sum(osha$OSHA_INSPECT_NO=="0") == dim(osha)[1]){
+  osha %<>% select(-OSHA_INSPECT_NO)
+}
+if(sum(is.na(osha$CSHO_ID)==TRUE) == dim(osha)[1]){
+  osha %<>% select(-CSHO_ID)
+}
+if(sum(osha$OLD_REPORT_NO=="000000000") == dim(osha)[1]){
+  osha %<>% select(-OLD_REPORT_NO)
+}
+if(sum(is.na(osha$OFFICE_IDENTIFIER)==TRUE) == dim(osha)[1]){
+  osha %<>% select(-OFFICE_IDENTIFIER)
+}
+if(sum(osha$OWNERCODE=="0") == dim(osha)[1]){
+  osha %<>% select(-OWNERCODE)
+}
+if(sum(osha$NAICS=="000000") == dim(osha)[1]){
+  osha %<>% select(-NAICS)
+}
+if(sum(osha$NAICSEC=="000000") == dim(osha)[1]){
+  osha %<>% select(-NAICSEC)
+}
+if(sum(osha$NAICSINS=="000000") == dim(osha)[1]){
+  osha %<>% select(-NAICSINS)
+}
+if(sum(osha$EMPLOYEE_COUNT=="0") == dim(osha)[1]){
+  osha %<>% select(-EMPLOYEE_COUNT)
+}
+if(sum(osha$EMPLOYEES_INSPECTED=="0") == dim(osha)[1]){
+  osha %<>% select(-EMPLOYEES_INSPECTED)
+}
+if(sum(osha$NATNL_EMPLOYEE_COUNT=="0") == dim(osha)[1]){
+  osha %<>% select(-NATNL_EMPLOYEE_COUNT)
+}
+if(sum(is.na(osha$EMPLS_INTVIEWD_DUR_INSPECT)==TRUE) == dim(osha)[1]){
+  osha %<>% select(-EMPLS_INTVIEWD_DUR_INSPECT)
+}
+
+# checking that data is all from MA and removing column if true
+if(sum(osha$SITESTATE=="MA")==dim(osha)[1]){
+  osha %<>% select(-SITESTATE)
+}
+
+# changing JOBTITLE from code to words
+job_title_decoded <- c("A" = "area director",
+                       "C" = "safety officer",
+                       "I" = "health officer",
+                       "L" = "safety trainee",
+                       "M" = "health trainee",
+                       "N" = "national office management",
+                       "O" = "area office support staff",
+                       "P" = "compliance program manager",
+                       "S" = "supervisor",
+                       "T" = "safety and health technician",
+                       "U" = "area office analyst",
+                       "V" = "discrim. invest'r",
+                       "W" = "regional mgt.",
+                       "X" = "regional FSO",
+                       "Y" = "regional tech. supp.",
+                       "Z" = "regional management")
+osha$JOBTITLE <- revalue(osha$JOBTITLE, job_title_decoded)
+
+# changing OWNERTYPE from code to words
+owner_type_decoded <- c("A" = "private",
+                        "B" = "local government",
+                        "C" = "state government",
+                        "D" = "federal government")
+osha$OWNERTYPE <- revalue(osha$OWNERTYPE, owner_type_decoded)
+
+# making ADVNOTICE title more clear
+colnames(osha)[14] <- "ADV_NOTICE(Y/N)"
+
+# changing CODES from code to words
+codes_decoded <- c("S" = "safety",
+                   "H" = "health")
+osha$CODES <- revalue(osha$CODES, codes_decoded)
+
+# changing INSPTYPE from code to words
+insp_type_decoded <- c("A" = "fatality/catastrophe (FAT/CAT)",
+                       "B" = "complaint",
+                       "C" = "referral",
+                       "D" = "monitoring",
+                       "E" = "variance",
+                       "F" = "follow-up",
+                       "G" = "related",
+                       "J" = "other Programmed",
+                       "H" = "planned",
+                       "I" = "related",
+                       "K" = "other",
+                       "L" = "non-inspection")
+osha$INSPTYPE <- revalue(osha$INSPTYPE, insp_type_decoded)
+
+# changing INSPSCOPE from code to words
+ins_scope_decoded <- c("A" = "comprehensive",
+                       "B" = "partial",
+                       "C" = "records only",
+                       "D" = "No inspection")
+osha$INSPSCOPE <- revalue(osha$INSPSCOPE, ins_scope_decoded)
+
+# changing EMPL_PRESENT_DURING_INSPECT from code to words
+empl_present_decoded <- c("X" = "yes")
+osha$EMPL_PRESENT_DUR_INSPECT <- revalue(osha$EMPL_PRESENT_DUR_INSPECT, empl_present_decoded)
+
+# clarifying EMPLS_REPD_BY_UNIONS title
+colnames(osha)[25] <- "EMPLS_REPD_BY_UNIONS(Y/N)"
+
+# changing CLOSEDCASE from code to words
+close_case_decoded <- c("X" = "yes")
+osha$CLOSECASE <- revalue(osha$CLOSECASE, close_case_decoded)
+osha$EMPLS_INTVIEWD_DUR_INSPECT <- revalue(osha$CLOSECASE, close_case_decoded)
+
+# changing WHYNOINSP from code to words
+no_insp_decoded <- c("A" = "establishment not found",
+                     "B" = "Employer out of business",
+                     "C" = "Process to be inspected not active",
+                     "D" = "ten or fewer employees",
+                     "E" = "denied entry",
+                     "F" = "SIC	not on planning guide",
+                     "G" = "worksite exempt through voluntary program",
+                     "H" = "non-exempt consultation in progress",
+                     "I" = "other reason")
+osha$WHYNOINSP <- revalue(osha$WHYNOINSP, no_insp_decoded)
+
+# changing all the Inspection Classification columns from code to words
+osha$SAFETYMANF <- revalue(osha$SAFETYMANF, close_case_decoded)
+osha$SFTYCONST <- revalue(osha$SFTYCONST, close_case_decoded)
+osha$SFTYMARIT <- revalue(osha$SFTYMARIT, close_case_decoded)
+osha$HELTHMANF <- revalue(osha$HELTHMANF, close_case_decoded)
+osha$HELTHCONST <- revalue(osha$HELTHCONST, close_case_decoded)
+osha$HELTHMARIT <- revalue(osha$HELTHMARIT, close_case_decoded)
+osha$MIGRANT <- revalue(osha$MIGRANT, close_case_decoded)
+
+# making Denial of Entry data more readable
+# change from X's to yes's
+osha$SUBPOENA_SERVED <- revalue(osha$SUBPOENA_SERVED, close_case_decoded)
+osha$`S/H_PROGRAM_INITIATED` <- revalue(osha$`S/H_PROGRAM_INITIATED`, close_case_decoded)
+# error, there are no X's in this column, so there is no information, remove column
+osha %<>% select(-`S/H_PROGRAM_INITIATED`)
+
+# make dates more legible
+osha$FRSTDENY <- ymd(osha$FRSTDENY)
+
+# checking whether or not these columns are only 0's and removing them if this is true
+if(sum(osha$`RE-ENTRY_DATE`=="0") == dim(osha)[1]){
+  osha %<>% select(-`RE-ENTRY_DATE`)
+}
+if(sum(osha$LOST_WORKDAY_INJURY_RATE=="0") == dim(osha)[1]){
+  osha %<>% select(-LOST_WORKDAY_INJURY_RATE)
+}
+if(sum(is.na(osha$DATARQD)==TRUE) == dim(osha)[1]){
+  osha %<>% select(-DATARQD)
+}
+
+# get rid of due date information, this is not relavent to workplace safety
+osha %<>% select(-FTA_PENALTY_DUE_DATES)
+osha %<>% select(-SOURCE_OF_DUE_DATE)
+osha %<>% select(-PENALTY_DUE_DATE)
+
+# getting rid of FRSTCONTST if it only contains 0's
+if(sum(osha$FRSTCONTST=="0") == dim(osha)[1]){
+  osha %<>% select(-FRSTCONTST)
+}
+
+# reading in sic.dbf
+sic <- read.dbf("lookups/sic.dbf")
+
+# changing sic column in osha from code to words
+osha <- left_join(osha, sic, by="SIC")
+osha %<>% select(-SIC)
+
+# reading in scc.dbf
+scc <- read.dbf("lookups/scc.dbf")
+scc <- filter(scc, STATE=="MA")
+# remove county column from osha, we are just going to look at city
+osha %<>% select(-SITECNTY)
+scc <- select(scc, CITY, NAME)
+colnames(scc) <- c("SITECITY", "CITY")
+osha <- left_join(osha, scc, by="SITECITY")
+osha %<>% select(-SITECITY)
+
+# removing columns that are NICAR converted (no relavent data)
+osha %<>% select(-LSTR_DT)
+osha %<>% select(-FRST_DT)
+osha %<>% select(-MOD_DATE)
+osha %<>% select(-OPENDT)
+osha %<>% select(-CLOSEDT)
+osha %<>% select(-CLOSEDT2)
+osha %<>% select(-PENDUDT)
+osha %<>% select(-FTADUDT)
+osha %<>% select(-FRSTCONDT)
+
+# checking if these columns are only 0's and removing them if this is true
+if(sum(osha$DUNSNO=="000000000") == dim(osha)[1]){
+  osha %<>% select(-DUNSNO)
+}
+if(sum(osha$CATSICGDE=="0000") == dim(osha)[1]){
+  osha %<>% select(-CATSICGDE)
+}
+if(sum(osha$CATSICINSP=="0000") == dim(osha)[1]){
+  osha %<>% select(-CATSICINSP)
+}
+
+# removing any columns left that are not relavent to workplace safety question
+osha %<>% select(-DATARQD)
+osha %<>% select(-DUNSNO)
+osha %<>% select(-CATSICGDE)
+osha %<>% select(-CATSICINSP)
+
+# table of top 10 cities with most violations
+tb <- table(osha$CITY)
+cities <- data.frame(tb)
+cities <- cities[cities$Freq>1000,]
+colnames(cities) <- c("CITY", "FREQUENCY")
+cities
+```
+
+```{r CleanOsha plots, echo=FALSE}
+library(ggplot2)
+# plot of top 10 cities with most violations
+ggplot(hazsubs, aes(x=SUBSTANCE, y=FREQUENCY)) + geom_point() + ggtitle("Most Frequently Exposed Hazardous Substances")
+
+```
+As seen in the above plot and table, the OSHA data set, while containing a lot of information that statisticians with the workplace safety question would find interesting, also includes information about location. This would allow investigators to uncover where the most dangerous workplaces tend to be.
+
+
+The CleanProg data set includes information about the kind of program that each workplace inspection was a part of. These data were already mostly clean, but the SITESTATE column was removed and the National, Local, or Special Emphasis focus of each inspection was decoded into English words. For commented code, please see CleanProg.R in the MA415MidtermFolder.
+
+```{r CleanProg, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(plyr)
+
+# read in prog.dbf
+prog <- read.dbf("prog.dbf")
+
+# removing SITESTATE column if only MA in column
+if(sum(prog$SITESTATE=="MA")==dim(prog)[1]){
+  prog %<>% select(-SITESTATE)
+}
+
+# changing progcode from code to words
+progcode_decoded <- c("L"="Local",
+                      "N"="National",
+                      "S"="Special Emphasis")
+prog$PROGCODE <- revalue(prog$PROGCODE, progcode_decoded)
+
+# table of the level of program of each workplace
+table(prog$PROGCODE)
+```
+
+```{r CleanProg plots, echo=FALSE}
+library(ggplot2)
+ggplot(prog, aes(x=PROGCODE, fill=PROGCODE)) + geom_bar() + ggtitle("Level of Program of each Workplace")
+
+# plot of level of program of each workplace
+```
+In the cleaned prog data set, it was clear that each workplace investigated fell into a certain type of program. A statistician could investigate further, but the larger the program (i.e. National level instead of Local level), the more serious their violation could have been. This would directly relate to workplace safety.
+
+
+The CleanRelact data set included information on events related to inspections. Primarily, it includes data regarding the type of relative event that caused the information to be recorded (i.e. complaint, referral, inspection) and whether or not there was a safety or health violation reported. The only cleaning required was the removal of the SITESTATE column and the decoding of the date from abbreviations to English words. For commented code, please see CleanRelact.R in the MA415MidtermFolder.
+
+```{r CleanRelact, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(plyr)
+
+# reading in relact.dbf 
+relact <- read.dbf("relact.dbf")
+
+# remove SITESTATE column
+if(sum(relact$SITESTATE=="MA")==dim(relact)[1]){
+  relact %<>% select(-SITESTATE)
+}
+
+# changing reltype from code to words
+reltyp_decoded <- c("A" = "Accident (FAT/CAT)",
+                    "C" = "Complaint",
+                    "I" = "Inspection",
+                    "R" = "Referral")
+relact$RELTYPE <- revalue(relact$RELTYPE, reltyp_decoded)
+
+# changing safety and health columns from code to words
+relact$SAFETY <- revalue(relact$SAFETY, c("X" = "yes"))
+relact$HEALTH <- revalue(relact$HEALTH, c("X" = "yes"))
+
+# table of related activity
+table(relact$RELTYPE)
+```
+
+```{r CleanRelact plots, echo=FALSE}
+library(ggplot2)
+# plot of related activity
+ggplot(relact, aes(x=RELTYPE, fill=RELTYPE)) + geom_bar() + ggtitle("Type of Record")
+
+```
+The cleaned relact data included information on the kind of record that reported health and safety code violations. This could be important to the statisticians that are investigating workplace safety because an accident is going to be more alarming than a complaint.
+
+
+The CleanViol data set includes information about workplace violations. In order to clean the data, the SITESTATE column, any empty columns, and any non-relavent columns were removed. Encoded data were decoded (replaced with clearer English words), dates were made easier to read, and column titles were clarified. Now CleanViol primarily contains information regarding severity of violations, time of violations, penalties, and how different workplaces reacted to accusations (did they contest claims or not?). For commented code, please see CleanViol.R in the MA415MidtermFolder.
+
+```{r CleanViol, echo=FALSE}
+library(data.table)
+library(foreign)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(lubridate)
+library(plyr)
+
+# reading in viol.dbf
+viol <- read.dbf("viol.dbf")
+
+# removing SITESTATE column if only MA in column
+if(sum(viol$SITESTATE=="MA")==dim(viol)[1]){
+  viol %<>% select(-SITESTATE)
+}
+
+# removing columns if there is nothing in them
+if(sum(is.na(viol$DELETE)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-DELETE)
+}
+if(sum(is.na(viol$EMPHASIS)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-EMPHASIS)
+}
+if(sum(is.na(viol$VIOLCONT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-VIOLCONT)
+}
+if(sum(is.na(viol$PENCONT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-PENCONT)
+}
+if(sum(is.na(viol$EMPRCONT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-EMPRCONT)
+}
+if(sum(is.na(viol$EMPECONT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-EMPECONT)
+}
+if(sum(is.na(viol$PMA)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-PMA)
+}
+if(sum(is.na(viol$AMENDED)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-AMENDED)
+}
+if(sum(is.na(viol$ISA)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-ISA)
+}
+if(sum(is.na(viol$DISPEVT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-DISPEVT)
+}
+if(sum(is.na(viol$FTA_AMN)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-FTA_AMN)
+}
+if(sum(is.na(viol$FTA_ISA)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-FTA_ISA)
+}
+if(sum(is.na(viol$FTA_DISP)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-FTA_DISP)
+}
+if(sum(is.na(viol$HAZCAT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-HAZCAT)
+}
+if(sum(is.na(viol$ABATEDT2)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-ABATEDT2)
+}
+if(sum(is.na(viol$ERCONDATE)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-ERCONDATE)
+}
+if(sum(is.na(viol$FINORDATE)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-FINORDATE)
+}
+if(sum(is.na(viol$FTA_ISDT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-FTA_ISDT)
+}
+if(sum(is.na(viol$CONTDATE)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-CONTDATE)
+}
+if(sum(is.na(viol$FTAFINDT)==TRUE)==dim(viol)[1]){
+  viol %<>% select(-FTAFINDT)
+}
+if(sum(viol$ERCONTDT=="0")==dim(viol)[1]){
+  viol %<>% select(-ERCONTDT)
+}
+if(sum(viol$FINORDT=="0")==dim(viol)[1]){
+  viol %<>% select(-FINORDT)
+}
+if(sum(viol$FTAINSP=="0")==dim(viol)[1]){
+  viol %<>% select(-FTAINSP)
+}
+if(sum(viol$FTAPEN=="0")==dim(viol)[1]){
+  viol %<>% select(-FTAPEN)
+}
+if(sum(viol$ISSUDT=="0")==dim(viol)[1]){
+  viol %<>% select(-ISSUDT)
+}
+if(sum(viol$CONTDT=="0")==dim(viol)[1]){
+  viol %<>% select(-CONTDT)
+}
+if(sum(viol$ABATEDT=="0")==dim(viol)[1]){
+  viol %<>% select(-ABATEDT)
+}
+if(sum(viol$FTA_FIN=="0")==dim(viol)[1]){
+  viol %<>% select(-FTA_FIN)
+}
+
+# remove all data that is not relavent to workplace safety question
+viol %<>% select(-ISSUEDATE)
+viol %<>% select(-DATE_ABATE)
+viol %<>% select(-ABATEDT2)
+viol %<>% select(-EMPECONT)
+viol %<>% select(-FINORDATE)
+viol %<>% select(-CONTDATE)
+viol %<>% select(-FTA_ISDT)
+viol %<>% select(-ISA)
+viol %<>% select(-ERCONDATE)
+
+# making the dates more readable
+viol$ISSUANCE <- ymd(viol$ISSUANCE)
+viol$ABATE <- ymd(viol$ABATE)
+viol$ABATEDT <- ymd(viol$ABATEDT)
+# no dates in this column -> remove column
+viol %<>% select(-ABATEDT)
+viol$ERCONTDT <- ymd(viol$ERCONTDT)
+viol$FINORDT <- ymd(viol$FINORDT)
+viol$ISSUDT <- ymd(viol$ISSUDT)
+viol$CONTDT <- ymd(viol$CONTDT)
+# no dates in this column -> remove column
+viol %<>% select(-CONTDT)
+
+# making columns easier to understand
+colnames(viol)[8] <- "GRAVITY_OUT_OF_10"
+colnames(viol)[9] <- "TOTAL_PENALTY_AMOUNT"
+colnames(viol)[10] <- "INITIAL_PENALTY_AMOUNT"
+colnames(viol)[12] <- "VIOLTYPE_INITIAL"
+colnames(viol)[16] <- "RELATED_EVENT"
+colnames(viol)[19] <- "EARLIEST_CONTEST_DATE"
+colnames(viol)[22] <- "DATECONT"
+colnames(viol)[23] <- "FINAL_CIT_DATE"
+colnames(viol)[24] <- "PETITION_MODIFY_ABATE"
+colnames(viol)[26] <- "DISP_CONTD_VIOL"
+colnames(viol)[27] <- "ACT_NO"
+colnames(viol)[29] <- "FAIL_TO_ABATE_DATE"
+colnames(viol)[30] <- "FTA_AMENDED"
+colnames(viol)[31] <- "FTA_SETTLMNT"
+
+# change VIOLTYPE and VIOLTYPE_INITIAL from code to words
+violtype_decoded <- c("O" = "other",
+                      "R" = "repeat",
+                      "S" = "serious",
+                      "U" = "unclassified",
+                      "W" = "willful")
+viol$VIOLTYPE <- revalue(viol$VIOLTYPE, violtype_decoded)
+viol$VIOLTYPE_INITIAL <- revalue(viol$VIOLTYPE_INITIAL, violtype_decoded)
+
+# change RELATED_EVENT from code to words
+related_event_decoded <- c("A" = "FAT/CAT (fatality/catastrophe), accident",
+                          "C" = "complaint",
+                          "I" = "imminent danger",
+                          "R" = "related event code",
+                          "V" = "variance")
+viol$RELATED_EVENT <- revalue(viol$RELATED_EVENT, related_event_decoded)
+
+# change ABATEDONE from code to words
+abate_done_decoded <- c("X" = "abatement, PPE, report completed",
+                        "E" = "abatement, PPE, plan, report not completed,
+                        employer out of business",
+                        "W" = "abatement, PPE, plan, report not completed,
+                        worksite changed",
+                        "S" = "abatement, PPE, plan, report not complete, ad
+                        discretion",
+                        "N" = "national indicator (older files)",
+                        "I" = "abatement completed immediately upon receipt of
+                        citation",
+                        "Q" = "quick fix (fixed during the walkaround)",
+                        "A" = "abatement, PPE, plan, report not completed, ad
+                        Discretion")
+viol$ABATEDONE <- revalue(viol$ABATEDONE, abate_done_decoded)
+
+# change VIOLCONT, PENCONT, DATECONT, PETITION_MODIFY_ABATE, AMENDED, FTA_AMENDED, and FTA_SETTLMNT from code to words
+yes_decoded <- c("X" = "yes")
+viol$VIOLCONT <- revalue(viol$VIOLCONT, yes_decoded)
+viol$PENCONT <- revalue(viol$PENCONT, yes_decoded)
+viol$DATECONT <- revalue(viol$DATECONT, yes_decoded)
+viol$PETITION_MODIFY_ABATE <- revalue(viol$PETITION_MODIFY_ABATE, yes_decoded)
+viol$AMENDED <- revalue(viol$AMENDED, yes_decoded)
+viol$FTA_AMENDED <- revalue(viol$FTA_AMENDED, yes_decoded)
+viol$FTA_SETTLMNT <- revalue(viol$FTA_SETTLMNT, yes_decoded)
+
+# change DISP_CONTD_VIOL and FTA_DISP from code to words
+disp_decoded <- c("W" = "employer withdrew contest",
+                  "D" = "government dismissed case",
+                  "L" = "state-settlement at admin. Level",
+                  "Y" = "state-decision at admin. Level",
+                  "F" = "formal settlement agreement",
+                  "J" = "administrative law judge decision",
+                  "R" = "review commission decision",
+                  "1" = "state-lower",
+                  "2" = "appeals court decision",
+                  "3" = "supreme court decision")
+viol$DISP_CONTD_VIOL <- revalue(viol$DISP_CONTD_VIOL, disp_decoded)
+viol$FTA_DISP <- revalue(viol$FTA_DISP, disp_decoded)
+
+# reading in STD 
+std <- read.dbf("lookups/std.dbf")
+std <- std[(std$STATE=="MA"),]
+# there is no information on MA in the STD file, removing the STD files from viol
+viol %<>% select(-STD)
+viol %<>% select(-STD_LOOKUP)
+
+# table of the gravity of violations
+table(viol$GRAVITY_OUT_OF_10)
+
+```
+
+```{r CleanViol plots, echo=FALSE}
+library(ggplot2)
+# plot of the date that the violation was issued against the gravity of the violation out of ten
+ggplot(viol, aes(ISSUANCE, GRAVITY_OUT_OF_10)) + geom_point() + ggtitle("Date Violation was Issued Against Gravity of Violation")
+
+```
+There are a lot of data in the cleaned violations data set that could be useful regarding the workplace safety question. As seen in the above plot and table, the gravity of the violation out of ten is something that could definitely be interesting. The plot of the date of the violation against the gravity of the violation could be very interesting because it could help statisticians to see whether or not workplace safety has been getting better or worse over time.
